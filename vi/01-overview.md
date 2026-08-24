@@ -433,6 +433,8 @@ Cột phải rất ngắn. Đó là chủ ý. Viết một transport mới phả
 
 Chỉ áp dụng cho transport không kết nối, thực tế là chỉ UDP. Một điểm cuối UDP nhận gói từ mọi nguồn. Transport UDP phải đối chiếu địa chỉ nguồn với peer đang chạy. Gói lạ thì vứt im lặng. Không báo lỗi, không kết thúc session. Một gói lạ không nói lên điều gì về trạng thái session.
 
+Cùng điểm cuối đó phải đặt trần cho bảng peer của mình. Mỗi địa chỉ nguồn mới gửi một byte là tạo một mục trong bảng. Không cần handshake, không cần gì khác. Một máy sinh được hàng chục nghìn cổng nguồn. Không có trần thì bảng phình vô hạn, đúng thứ §6 cấm. Chạm trần thì gói từ địa chỉ chưa biết bị vứt im lặng, xử lý y như gói lạ ở trên. Session đang chạy không bị ảnh hưởng. Con số cụ thể tùy bản triển khai. Bắt buộc phải có một con số.
+
 TCP, TLS, WebSocket và QUIC đã gắn sẵn với một peer. Điều kiện này tự thỏa mãn, transport không phải làm gì thêm.
 
 Đây không phải bước kiểm tra bảo mật. Nó không xác thực, không chống giả mạo. Việc hai bên có nói cùng một thứ tiếng hay không do handshake Fomoxa lo, ở core. Kiểm tra riêng của giao thức thuộc về bên chấp nhận kết nối. Ngoài phạm vi tài liệu này.

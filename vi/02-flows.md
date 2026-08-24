@@ -982,6 +982,9 @@ Frame và giới hạn:
 - ⊘ → lỗi lên ứng dụng, session vẫn sống, core không thử lại
 - Dữ liệu đến dồn dập → dừng ở trần, phần còn lại lấy ở tick sau
 - Handshake thất bại và transport chết → chỉ một sự kiện kết thúc
+- Hàng đợi nhận của transport kiểu gói đầy → gói cũ nhất biến mất, gói mới nhất còn lại
+- Transport giả luôn trả ⏸, cộng một peer gửi POLL mỗi tick → ô chờ dừng ở trần, đúng một sự kiện kết thúc, không ném lỗi ra khỏi tick
+- Nhiều địa chỉ nguồn lạ gửi vào một điểm cuối UDP → bảng peer dừng ở trần, session đang chạy không bị ảnh hưởng
 
 ### Liên thông
 - Trên hết: hai bản triển khai bằng hai ngôn ngữ khác nhau nói chuyện được với nhau, cả hai chiều

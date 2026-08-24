@@ -983,6 +983,9 @@ Framing and limits:
 - ⊘ → error to the app, the session stays alive, core does not retry
 - A burst of incoming data → stop at the ceiling, take the rest next tick
 - Handshake failed and the transport died → exactly one termination event
+- The receive queue of a packet transport fills → the oldest packet is gone, the newest is kept
+- A fake transport that always returns ⏸, plus a peer sending POLL every tick → the pending queue stops at its ceiling, exactly one termination event, nothing thrown out of the tick
+- Many unknown source addresses sending to one UDP endpoint → the peer table stops at its ceiling, running sessions are unaffected
 
 ### Interoperability
 - Above all: two implementations in two different languages talk to each other, both directions

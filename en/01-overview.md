@@ -433,6 +433,8 @@ The right column is very short. That is deliberate. Writing a new transport must
 
 This applies only to connectionless transports, which in practice means UDP alone. A UDP endpoint receives packets from any source. A UDP transport must check the source address against the active peer. Unknown packets are dropped silently. No error is raised, no session is ended. An unexpected packet says nothing about session state.
 
+That same endpoint must put a ceiling on its peer table. Every new source address that sends one byte creates an entry. No handshake is required, nothing else is either. One machine can produce tens of thousands of source ports. Without a ceiling the table grows without bound, which is what §6 forbids. At the ceiling, packets from unknown addresses are dropped silently, handled exactly like the unexpected packets above. Running sessions are unaffected. The exact number is per implementation. Having a number is mandatory.
+
 TCP, TLS, WebSocket and QUIC are already bound to one peer. The condition is satisfied automatically and transport does nothing extra.
 
 This is not a security check. It does not authenticate and it does not stop spoofing. Whether both sides speak the same language is decided by the Fomoxa handshake, in core. Protocol-specific checks belong to whoever accepts the connection. Out of scope for this document.
