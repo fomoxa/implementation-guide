@@ -1,13 +1,11 @@
-# Fomoxa — Implementation Guide
+# Fomoxa implementation guide
 
-A document set for building a transport or a Fomoxa SDK in any language, described at the conceptual level: no SDK, no API, no specific source code.
+A document set for building a transport or a Fomoxa SDK in any language. It is described at the conceptual level, without an SDK, an API or source code.
 
-This is a guide, not an exam. Nobody has to read both documents end to end to start.
-Pick a reading path for the job in front of you in [§ Read by What You Are Doing](#read-by-what-you-are-doing), then come back to look things up.
+The documents are meant for lookup, and reading both end to end is not a prerequisite for starting.
+Pick a reading path for the task at hand in [§ Read by task](#read-by-task), then come back to look things up.
 
----
-
-## Document Map
+## Document map
 
 | Document | Content | Length |
 |---|---|---|
@@ -18,11 +16,9 @@ Internally the two documents refer to each other by the concept names `01_overvi
 
 The `vi/` directory holds the Vietnamese version. Other translations, if any, live in their own language-code directory.
 
----
+## Read by task
 
-## Read by What You Are Doing
-
-| What you want | This much is enough |
+| What you want | Sections to read |
 |---|---|
 | Understand how Fomoxa splits its layers | `01` §1–§3 |
 | Write a new transport (WebSocket, TLS, QUIC, UDP…) | `01` §2, §3, §11, §12 → `02` §9, plus the self-check table §9.5 |
@@ -33,13 +29,11 @@ The `vi/` directory holds the Vietnamese version. Other translations, if any, li
 | Verify an existing implementation | `02` §11 → `01` §14 |
 | Debug interoperability between two implementations | `02` §2 and §10 |
 
-A transport author does not read the wire format. That is a design condition, not a convenience: a transport only carries bytes. If you find yourself needing to know what a byte means, logic sits in the wrong layer.
+A transport author does not read the wire format. This is a design condition: a transport only carries bytes, so a transport that needs to know what a byte means has logic in the wrong layer.
 
----
+## One-page summary
 
-## One-Page Summary
-
-Three layers, and the boundaries between them matter most:
+Fomoxa has three layers, and most of the rules concern the boundaries between them:
 
 ```
   APP          messages that mean something to the application
@@ -47,31 +41,27 @@ Three layers, and the boundaries between them matter most:
   TRANSPORT    carries bytes only  (TCP / UDP / WebSocket / TLS / QUIC)
 ```
 
-A transport provides exactly four functions — send, receive, soft close, hard close and answers with exactly six signals:
+A transport provides exactly four functions (send, receive, soft close, hard close) and answers with exactly six signals:
 
 ```
   ✔ done    ⏸ not now    ✖ closed    ⚠ error    ⊘ too large    ⤢ buffer too small
 ```
 
-There is no fifth function, no "sit and wait", no "reconnect on its own". Remembering and retrying belong to core.
+A transport has no fifth function, no blocking wait and no automatic reconnect. Remembering and retrying belong to core.
 
-A few fixed numbers: a DATA frame is at most 16 MiB + 11 bytes; a HANDSHAKE body is at most 1 MiB; the default handshake deadline is 5 seconds, the heartbeat interval 5 seconds, the heartbeat deadline 15 seconds.
+Fixed numbers: a DATA frame is at most 16 MiB + 11 bytes; a HANDSHAKE body is at most 1 MiB; the default handshake deadline is 5 seconds, the heartbeat interval 5 seconds, the heartbeat deadline 15 seconds.
 
-The nine invariants every implementation must hold live in `01` §14. Remember one thing and make it this: no layer may block.
+The nine invariants every implementation must hold are in `01` §14. The one that applies everywhere is that no layer may block.
 
----
+## Out of scope for this document set
 
-## Out of Scope for This Document Set
-
-- Schema fingerprint computation and message data encoding — those belong to the Fomoxa
+- Schema fingerprint computation and message data encoding belong to the Fomoxa
   schema specification.
-- Per-language API bindings — each implementation picks its own names and its own call
+- Per-language API bindings. Each implementation picks its own names and its own call
   shapes. Only *behaviour* is defined here, and behaviour must be identical everywhere.
-- The transport's own handshake (TCP, TLS, the WebSocket upgrade) — it happens first,
-  outside, and the transport author owns it.
-
----
+- The transport's own handshake (TCP, TLS, the WebSocket upgrade). It happens first,
+  outside Fomoxa, and the transport author owns it.
 
 ## License
 
-CC BY 4.0 — see [LICENSE](LICENSE). Software implementations are independent projects and pick whatever license their authors choose.
+CC BY 4.0, see [LICENSE](LICENSE). Software implementations are independent projects and pick whatever license their authors choose.

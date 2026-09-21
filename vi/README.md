@@ -1,10 +1,8 @@
-# Fomoxa — Hướng dẫn triển khai
+# Hướng dẫn triển khai Fomoxa
 
-Tập tài liệu hướng dẫn dựng một transport hoặc một SDK Fomoxa trên bất kỳ ngôn ngữ nào, mô tả ở mức khái niệm: không SDK, không API, không mã nguồn cụ thể.
+Tập tài liệu hướng dẫn dựng một transport hoặc một SDK Fomoxa trên bất kỳ ngôn ngữ nào, mô tả ở mức khái niệm, không kèm SDK, API hay mã nguồn.
 
-Đây là hướng dẫn, không phải bài kiểm tra. Không ai cần đọc hết cả hai tài liệu để bắt đầu chọn đường đọc theo đúng việc bạn đang làm ở [§ Đọc theo việc bạn đang làm](#đọc-theo-việc-bạn-đang-làm) rồi quay lại tra cứu khi cần.
-
----
+Tài liệu dùng để tra cứu; không cần đọc hết cả hai tài liệu mới bắt đầu được. Chọn đường đọc theo công việc ở [§ Đọc theo công việc](#đọc-theo-công-việc) rồi quay lại tra cứu khi cần.
 
 ## Bản đồ tài liệu
 
@@ -19,11 +17,9 @@ Bên trong, hai tài liệu gọi nhau bằng tên khái niệm `01_overview.md`
 Thư mục `vi/` là bản tiếng Việt. Các bản dịch khác, nếu có, nằm ở thư mục mã ngôn ngữ
 của riêng nó.
 
----
+## Đọc theo công việc
 
-## Đọc theo việc bạn đang làm
-
-| Bạn đang muốn | Đọc chừng này là đủ |
+| Việc cần làm | Các mục cần đọc |
 |---|---|
 | Hiểu Fomoxa chia tầng thế nào | `01` §1–§3 |
 | Viết một transport mới (WebSocket, TLS, QUIC, UDP…) | `01` §2, §3, §11, §12 → `02` §9, và bảng tự kiểm §9.5 |
@@ -34,13 +30,11 @@ của riêng nó.
 | Kiểm chứng bản triển khai đã có | `02` §11 → `01` §14 |
 | Sửa lỗi liên thông giữa hai bản triển khai | `02` §2 và §10 |
 
-Người viết transport không cần đọc định dạng trên dây. Đó là điều kiện thiết kế, không phải sự tiện tay: transport chỉ chở byte, và nếu bạn thấy mình cần biết byte đó nghĩa là gì thì đang có logic đặt sai tầng.
-
----
+Người viết transport không cần đọc định dạng trên dây. Đây là điều kiện thiết kế: transport chỉ chở byte, nên một transport cần biết byte mang nghĩa gì là transport có logic đặt sai tầng.
 
 ## Tóm tắt một trang
 
-Ba tầng, và ranh giới giữa chúng là thứ quan trọng nhất:
+Fomoxa có ba tầng, và phần lớn quy tắc là về ranh giới giữa chúng:
 
 ```
   ỨNG DỤNG     message có ý nghĩa với nghiệp vụ
@@ -48,31 +42,27 @@ Ba tầng, và ranh giới giữa chúng là thứ quan trọng nhất:
   TRANSPORT    chỉ chở byte  (TCP / UDP / WebSocket / TLS / QUIC)
 ```
 
-Transport cung cấp đúng bốn chức năng — gửi, nhận, đóng mềm, đóng hẳn — và trả lời bằng đúng sáu tín hiệu:
+Transport cung cấp đúng bốn chức năng (gửi, nhận, đóng mềm, đóng hẳn) và trả lời bằng đúng sáu tín hiệu:
 
 ```
   ✔ xong    ⏸ chưa được    ✖ đã đóng    ⚠ lỗi    ⊘ quá lớn    ⤢ chỗ không đủ
 ```
 
-Không có chức năng thứ năm, không có "ngồi chờ", không có "tự kết nối lại". Việc nhớ và thử lại là của core.
+Transport không có chức năng thứ năm, không chờ chặn và không tự kết nối lại. Việc nhớ và thử lại thuộc core.
 
-Vài con số cố định: khung DỮ LIỆU tối đa 16 MiB + 11 byte; nội dung BẮT TAY tối đa 1 MiB; mặc định hạn bắt tay 5 giây, chu kỳ nhịp tim 5 giây, hạn nhịp tim 15 giây.
+Các con số cố định: khung DỮ LIỆU tối đa 16 MiB + 11 byte; nội dung BẮT TAY tối đa 1 MiB; mặc định hạn bắt tay 5 giây, chu kỳ nhịp tim 5 giây, hạn nhịp tim 15 giây.
 
-Chín bất biến mà mọi bản triển khai phải giữ nằm ở `01` §14. Nếu chỉ nhớ được một điều, nhớ điều này: không lớp nào được phép chặn.
-
----
+Chín bất biến mà mọi bản triển khai phải giữ nằm ở `01` §14. Bất biến áp dụng ở mọi nơi là: không lớp nào được phép chặn.
 
 ## Ngoài phạm vi tập tài liệu này
 
-- Cách tính vân tay lược đồ và cách mã hóa dữ liệu của message — thuộc đặc tả lược đồ
+- Cách tính vân tay lược đồ và cách mã hóa dữ liệu của message thuộc đặc tả lược đồ
   của Fomoxa.
-- Ràng buộc API của từng ngôn ngữ — mỗi bản triển khai tự đặt tên và tự quyết hình dạng
-  lời gọi. Ở đây chỉ có *hành vi*, và hành vi thì mọi bản phải giống nhau.
-- Bắt tay của chính đường truyền (TCP, TLS, nâng cấp WebSocket) — xảy ra trước, bên
-  ngoài, do người viết transport tự lo.
-
----
+- Ràng buộc API của từng ngôn ngữ. Mỗi bản triển khai tự đặt tên và tự quyết hình dạng
+  lời gọi. Tài liệu này chỉ quy định *hành vi*, và hành vi phải giống nhau ở mọi bản.
+- Bắt tay của chính đường truyền (TCP, TLS, nâng cấp WebSocket). Bước này xảy ra trước,
+  bên ngoài Fomoxa, do người viết transport tự lo.
 
 ## Giấy phép
 
-CC BY 4.0 — xem [LICENSE](LICENSE). Bản triển khai phần mềm là dự án độc lập và chọn giấy phép nào tùy tác giả.
+CC BY 4.0, xem [LICENSE](LICENSE). Bản triển khai phần mềm là dự án độc lập và chọn giấy phép nào tùy tác giả.
