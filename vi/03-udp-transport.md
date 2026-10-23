@@ -60,6 +60,7 @@ Mã phiên mang trong mọi datagram tách việc peer là ai khỏi việc nó 
 - Mọi datagram server gửi cho một peer đều mang mã của peer đó.
 - Mã mới là một giá trị 64 bit ngẫu nhiên từ bộ sinh an toàn mật mã. Nó khác không và khác mã của mọi peer đang tồn tại.
 - Địa chỉ đã ghi chỉ đổi sau khi một datagram được nhận. Datagram bị bỏ không bao giờ làm peer dịch chuyển.
+- Nếu A đã là địa chỉ của một peer khác thì datagram bị bỏ và không peer nào dịch chuyển.
 - Bảng peer giữ trần ở `01_overview.md` §10. Trần đó áp dụng cho bước tạo peer ở trên.
 - Khi peer được giải phóng bằng hard close, mã cũng được giải phóng theo. Datagram nào mang mã đó về sau bị bỏ như mã lạ.
 
@@ -97,7 +98,7 @@ Core không thấy thay đổi nào. Nó nhận frame theo cùng thứ tự như
 - [ ] Server không bao giờ gửi datagram mang mã `0`
 - [ ] Mã `0` chỉ tạo peer khi bảng peer còn dưới trần
 - [ ] Mã khác không mà không biết thì bị bỏ im lặng
-- [ ] Địa chỉ đã ghi chỉ đổi sau một datagram được nhận
+- [ ] Địa chỉ đã ghi chỉ đổi sau một datagram được nhận, và không bao giờ sang địa chỉ của peer khác
 - [ ] Client giữ mã đầu tiên nhận được và bỏ datagram mang mã khác
 - [ ] Trần của một frame là trần datagram trừ 8
 - [ ] Core không được báo gì về việc đổi địa chỉ

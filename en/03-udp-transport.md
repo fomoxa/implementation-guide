@@ -60,6 +60,7 @@ A session identifier carried in every datagram separates who the peer is from wh
 - Every datagram the server sends to a peer carries that peer's id.
 - A new id is a random 64-bit value from a cryptographically secure generator. It is non-zero and differs from every id of a peer that currently exists.
 - The recorded address changes only after a datagram has been accepted. A dropped datagram never moves a peer.
+- If A is already the address of another peer, the datagram is dropped and neither peer moves.
 - The peer table keeps the ceiling from `01_overview.md` §10. That ceiling applies to the creation step above.
 - When a peer is released by hard close, its id is released with it. A later datagram that carries the id is dropped as an unknown id.
 
@@ -97,7 +98,7 @@ This is the only datagram format of the UDP transport. A datagram without the 8-
 - [ ] The server never sends a datagram with id `0`
 - [ ] Id `0` creates a peer only when the peer table is below its ceiling
 - [ ] An unknown non-zero id is dropped silently
-- [ ] The recorded address changes only after an accepted datagram
+- [ ] The recorded address changes only after an accepted datagram, and never onto an address another peer holds
 - [ ] The client keeps the first id it receives and drops datagrams that carry another
 - [ ] The ceiling for a frame is the datagram ceiling minus 8
 - [ ] Core is told nothing about an address change
