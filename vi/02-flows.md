@@ -892,7 +892,7 @@ Hai chức năng khác nhau: đóng mềm là *thông báo lịch sự cho peer*
 - [ ] Đóng hẳn giải phóng mọi thứ, và an toàn cả khi trạng thái đang dở
 - [ ] Gọi đóng hai lần không lỗi (dù core cam kết chỉ gọi một lần)
 - [ ] Transport có phân biệt kiểu dữ liệu: dùng nhị phân, không dùng văn bản
-- [ ] Không thêm byte nào của riêng mình vào dữ liệu
+- [ ] Không thêm byte nào của riêng mình vào frame (transport UDP đặt mã phiên trước frame, xem `03_udp_transport.md`)
 
 ---
 

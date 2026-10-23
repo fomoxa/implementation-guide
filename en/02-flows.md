@@ -894,7 +894,7 @@ The two functions differ: soft close is *being polite to the peer*, hard close i
 - [ ] Hard close releases everything, and is safe on a half-built state
 - [ ] Calling close twice does not fail (even though core promises to call it once)
 - [ ] Transport with a data-type distinction: use binary, never text
-- [ ] No byte of your own is added to the data
+- [ ] No byte of your own is added to a frame (a UDP transport puts its session identifier before the frame, see `03_udp_transport.md`)
 
 ---
 

@@ -10,9 +10,11 @@ Tài liệu dùng để tra cứu; không cần đọc hết cả hai tài liệ
 |---|---|---|
 | [vi/01-overview.md](vi/01-overview.md) | Mô hình ba tầng, ranh giới, phân chia trách nhiệm core ↔ transport, các điều cấm | ~650 dòng |
 | [vi/02-flows.md](vi/02-flows.md) | Định dạng trên dây, từng luồng chi tiết, mã giả cho core và transport, danh mục kiểm thử | ~860 dòng |
+| [vi/03-udp-transport.md](vi/03-udp-transport.md) | Cách transport UDP nhận diện peer: mã phiên ở đầu mỗi datagram | ~110 dòng |
 
-Bên trong, hai tài liệu gọi nhau bằng tên khái niệm `01_overview.md` và
-`02_flows.md`. Chúng tương ứng với `vi/01-overview.md` và `vi/02-flows.md`.
+Bên trong, các tài liệu gọi nhau bằng tên khái niệm `01_overview.md`, `02_flows.md` và
+`03_udp_transport.md`. Chúng tương ứng với `vi/01-overview.md`, `vi/02-flows.md` và
+`vi/03-udp-transport.md`.
 
 Thư mục `vi/` là bản tiếng Việt. Các bản dịch khác, nếu có, nằm ở thư mục mã ngôn ngữ
 của riêng nó.
@@ -22,7 +24,7 @@ của riêng nó.
 | Việc cần làm | Các mục cần đọc |
 |---|---|
 | Hiểu Fomoxa chia tầng thế nào | `01` §1–§3 |
-| Viết một transport mới (WebSocket, TLS, QUIC, UDP…) | `01` §2, §3, §11, §12 → `02` §9, và bảng tự kiểm §9.5 |
+| Viết một transport mới (WebSocket, TLS, QUIC, UDP…) | `01` §2, §3, §11, §12 → `02` §9, và bảng tự kiểm §9.5. Với UDP đọc thêm `03` |
 | Chỉ cần byte trên dây (viết bộ mã hóa/giải mã) | `02` §2 |
 | Hiểu bắt tay và kiểm tra lược đồ | `02` §3 |
 | Hiểu nhịp tim, phát hiện peer chết | `02` §4 |

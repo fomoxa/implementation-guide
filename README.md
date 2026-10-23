@@ -11,8 +11,9 @@ Pick a reading path for the task at hand in [§ Read by task](#read-by-task), th
 |---|---|---|
 | [en/01-overview.md](en/01-overview.md) | The three-layer model, the boundaries, the core ↔ transport split, the prohibitions | ~550 lines |
 | [en/02-flows.md](en/02-flows.md) | Wire format, every flow in detail, pseudocode for core and transport, the test checklist | ~990 lines |
+| [en/03-udp-transport.md](en/03-udp-transport.md) | How a UDP transport identifies a peer: the session identifier at the start of each datagram | ~110 lines |
 
-Internally the two documents refer to each other by the concept names `01_overview.md` and `02_flows.md`. Those map to `en/01-overview.md` and `en/02-flows.md`.
+Internally the documents refer to each other by the concept names `01_overview.md`, `02_flows.md` and `03_udp_transport.md`. Those map to `en/01-overview.md`, `en/02-flows.md` and `en/03-udp-transport.md`.
 
 The `vi/` directory holds the Vietnamese version. Other translations, if any, live in their own language-code directory.
 
@@ -21,7 +22,7 @@ The `vi/` directory holds the Vietnamese version. Other translations, if any, li
 | What you want | Sections to read |
 |---|---|
 | Understand how Fomoxa splits its layers | `01` §1–§3 |
-| Write a new transport (WebSocket, TLS, QUIC, UDP…) | `01` §2, §3, §11, §12 → `02` §9, plus the self-check table §9.5 |
+| Write a new transport (WebSocket, TLS, QUIC, UDP…) | `01` §2, §3, §11, §12 → `02` §9, plus the self-check table §9.5. For UDP, also `03` |
 | Only need the bytes on the wire (writing a codec) | `02` §2 |
 | Understand the handshake and the schema check | `02` §3 |
 | Understand the heartbeat and peer death detection | `02` §4 |

@@ -431,9 +431,9 @@ Cột transport được giữ ngắn có chủ ý để việc viết một tra
 
 ### Chi tiết về "bỏ qua dữ liệu không phải của session này"
 
-Quy định này chỉ áp dụng cho transport không kết nối, trên thực tế là UDP. Một điểm cuối UDP nhận gói từ mọi nguồn, nên transport UDP phải đối chiếu địa chỉ nguồn với peer đang chạy. Gói lạ bị bỏ mà không báo lỗi và không kết thúc session, vì một gói lạ không phản ánh trạng thái session.
+Quy định này chỉ áp dụng cho transport không kết nối, trên thực tế là UDP. Một điểm cuối UDP nhận gói từ mọi nguồn, nên transport UDP phải biết mỗi gói thuộc về peer nào. Nó làm việc đó bằng mã phiên ở đầu mỗi datagram, được định nghĩa trong `03_udp_transport.md`, chứ không chỉ bằng địa chỉ nguồn. Gói lạ bị bỏ mà không báo lỗi và không kết thúc session, vì một gói lạ không phản ánh trạng thái session.
 
-Điểm cuối đó cũng phải đặt trần cho bảng peer. Mỗi địa chỉ nguồn mới gửi một byte là tạo một mục trong bảng, không cần handshake hay điều kiện nào khác, và một máy có thể sinh hàng chục nghìn cổng nguồn. Không có trần thì bảng tăng vô hạn, điều mà §6 cấm. Khi chạm trần, gói từ địa chỉ chưa biết bị bỏ như gói lạ ở trên, còn session đang chạy không bị ảnh hưởng. Con số cụ thể tùy bản triển khai, nhưng bắt buộc phải có.
+Điểm cuối đó cũng phải đặt trần cho bảng peer. Mỗi địa chỉ nguồn mới gửi một datagram là tạo một mục trong bảng, không cần handshake hay điều kiện nào khác, và một máy có thể sinh hàng chục nghìn cổng nguồn. Không có trần thì bảng tăng vô hạn, điều mà §6 cấm. Khi chạm trần, gói từ địa chỉ chưa biết bị bỏ như gói lạ ở trên, còn session đang chạy không bị ảnh hưởng. Con số cụ thể tùy bản triển khai, nhưng bắt buộc phải có.
 
 TCP, TLS, WebSocket và QUIC đã gắn sẵn với một peer, nên điều kiện này tự thỏa mãn và transport không phải làm gì thêm.
 
@@ -503,7 +503,7 @@ Nếu phải sửa core để transport mới chạy được thì hoặc thiế
 | Tự sắp xếp lại hay gửi lại gói | Thêm độ trễ mà core không biết, và phá vỡ đánh đổi có chủ đích của UDP. |
 | Tự kết nối lại khi đứt | Core đang tính peer đã chết. Một đường ống sống lại trong im lặng khiến hai bên hiểu khác nhau về trạng thái session. |
 | Diễn giải nội dung byte | Sai tầng. Byte đó có thể là handshake hoặc dữ liệu ứng dụng, và transport không được phân biệt. |
-| Thêm phần đầu của riêng mình | Định dạng trên dây là cố định để mọi bản triển khai tương thích với nhau; thêm byte là mất tương thích. |
+| Thêm byte vào frame, hoặc thêm phần đầu mà không tài liệu transport nào định nghĩa | Định dạng trên dây là cố định để mọi bản triển khai tương thích với nhau; thêm byte là mất tương thích. Phần đầu duy nhất transport được thêm là mã phiên của transport UDP, nằm ngoài frame (`03_udp_transport.md`). |
 | Dùng kiểu dữ liệu văn bản (nếu transport có phân biệt) | Frame Fomoxa là nhị phân thuần túy, không phải UTF-8 hợp lệ. |
 
 ---
@@ -537,7 +537,7 @@ Khi dựng lại Fomoxa trên ngôn ngữ khác, các điều sau không đượ
 
 | # | Bất biến |
 |---|----------|
-| B1 | Định dạng trên dây là cố định. Không thêm, bớt, hay đổi thứ tự byte nào. Không thêm lớp đóng gói riêng. (`02_flows.md` §2) |
+| B1 | Định dạng trên dây là cố định. Không thêm, bớt, hay đổi thứ tự byte nào. Không thêm lớp đóng gói riêng quanh frame; mã phiên của transport UDP nằm ngoài frame (`03_udp_transport.md`). (`02_flows.md` §2) |
 | B2 | Không có lớp nào được phép chặn. Mọi thao tác trả quyền điều khiển lại ngay. |
 | B3 | Handshake xong mới được gửi dữ liệu ứng dụng. Không byte ứng dụng nào ra dây trước verdict chấp nhận. |
 | B4 | Server là bên duy nhất so sánh schema. Client gửi greeting và chỉ đọc một byte verdict. |

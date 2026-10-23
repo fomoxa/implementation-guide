@@ -431,9 +431,9 @@ The transport column is kept short on purpose, so that writing a new transport i
 
 ### Details of "ignoring data that is not from this session"
 
-This rule applies only to connectionless transports, which in practice means UDP. A UDP endpoint receives packets from any source, so a UDP transport must check the source address against the active peer. Unknown packets are dropped silently, without raising an error or ending a session, because an unexpected packet says nothing about session state.
+This rule applies only to connectionless transports, which in practice means UDP. A UDP endpoint receives packets from any source, so a UDP transport must tell which peer each packet belongs to. It does that with the session identifier at the start of every datagram, defined in `03_udp_transport.md`, and not with the source address alone. Unknown packets are dropped silently, without raising an error or ending a session, because an unexpected packet says nothing about session state.
 
-The same endpoint must put a ceiling on its peer table. Every new source address that sends one byte creates an entry, with no handshake or other condition required, and one machine can produce tens of thousands of source ports. Without a ceiling the table grows without bound, which §6 forbids. At the ceiling, packets from unknown addresses are dropped silently, like the unexpected packets above, and running sessions are unaffected. The exact number is per implementation, but having one is mandatory.
+The same endpoint must put a ceiling on its peer table. Every new source address that sends a datagram creates an entry, with no handshake or other condition required, and one machine can produce tens of thousands of source ports. Without a ceiling the table grows without bound, which §6 forbids. At the ceiling, packets from unknown addresses are dropped silently, like the unexpected packets above, and running sessions are unaffected. The exact number is per implementation, but having one is mandatory.
 
 TCP, TLS, WebSocket and QUIC are already bound to one peer, so the condition is satisfied automatically and transport does nothing extra.
 
@@ -503,7 +503,7 @@ If core has to change for a new transport to work, either the design is missing 
 | Reordering or resending packets | It adds delay core cannot see, and destroys UDP's deliberate trade-off. |
 | Reconnecting on its own after a break | Core already counts the peer as dead. A pipe that silently comes back leaves the two sides disagreeing about session state. |
 | Interpreting the bytes | Wrong layer. Those bytes may be a handshake or application data, and transport must not distinguish them. |
-| Adding a header of its own | The wire format is fixed so every implementation interoperates; extra bytes break that. |
+| Adding bytes to a frame, or a header that no transport document defines | The wire format is fixed so every implementation interoperates; extra bytes break that. The only header a transport may add is the session identifier of the UDP transport, outside the frame (`03_udp_transport.md`). |
 | Using the text data type (where the transport distinguishes) | Fomoxa frames are pure binary, not valid UTF-8. |
 
 ---
@@ -537,7 +537,7 @@ An implementation of Fomoxa in another language must not change any of the follo
 
 | # | Invariant |
 |---|----------|
-| B1 | The wire format is fixed. Add, remove or reorder no byte. Add no wrapper of your own. (`02_flows.md` §2) |
+| B1 | The wire format is fixed. Add, remove or reorder no byte. Add no wrapper of your own around a frame; the session identifier of the UDP transport sits outside the frame (`03_udp_transport.md`). (`02_flows.md` §2) |
 | B2 | No layer may block. Every operation returns control immediately. |
 | B3 | Application data goes out only after the handshake. No application byte reaches the wire before an accept verdict. |
 | B4 | Server is the only side that compares schemas. Client sends a greeting and reads one verdict byte. |
