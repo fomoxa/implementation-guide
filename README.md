@@ -50,7 +50,7 @@ A transport provides exactly four functions (send, receive, soft close, hard clo
 
 A transport has no fifth function, no blocking wait and no automatic reconnect. Remembering and retrying belong to core.
 
-Fixed numbers: a DATA frame is at most 16 MiB + 11 bytes; a HANDSHAKE body is at most 1 MiB; the default handshake deadline is 5 seconds, the heartbeat interval 5 seconds, the heartbeat deadline 15 seconds.
+Fixed numbers: a DATA frame is at most 16 MiB + 11 bytes; a HANDSHAKE body is at most 1 MiB; a handshake frame on a packet transport is at most 900 bytes; the default handshake deadline is 5 seconds, the heartbeat interval 5 seconds, the heartbeat deadline 15 seconds.
 
 The nine invariants every implementation must hold are in `01` §14. The one that applies everywhere is that no layer may block.
 

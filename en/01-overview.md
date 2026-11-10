@@ -326,6 +326,8 @@ If a frame exceeds the transport ceiling, transport answers ⊘ "too large" (§2
 
 A transport must never fragment a frame on its own, because fragmenting changes the wire format.
 
+Core itself splits one thing: a handshake body on a packet transport, into HANDSHAKE PART frames of at most 900 bytes (`02_flows.md` §2.8). The split is part of the wire format, and it keeps a handshake under the UDP guideline above whatever the size of the schema. Application messages are never split; a DATA frame above the transport ceiling still gets ⊘.
+
 In the receive direction, if an incoming packet is larger than the space core supplied, transport answers ⤢ with the byte count it needs. Core grows the buffer and asks again within the same tick. Losing the packet is forbidden.
 
 ### What Fomoxa does not do

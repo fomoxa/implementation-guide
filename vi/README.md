@@ -52,7 +52,7 @@ Transport cung cấp đúng bốn chức năng (gửi, nhận, đóng mềm, đ�
 
 Transport không có chức năng thứ năm, không chờ chặn và không tự kết nối lại. Việc nhớ và thử lại thuộc core.
 
-Các con số cố định: khung DỮ LIỆU tối đa 16 MiB + 11 byte; nội dung BẮT TAY tối đa 1 MiB; mặc định hạn bắt tay 5 giây, chu kỳ nhịp tim 5 giây, hạn nhịp tim 15 giây.
+Các con số cố định: khung DỮ LIỆU tối đa 16 MiB + 11 byte; nội dung BẮT TAY tối đa 1 MiB; frame bắt tay trên transport kiểu gói tối đa 900 byte; mặc định hạn bắt tay 5 giây, chu kỳ nhịp tim 5 giây, hạn nhịp tim 15 giây.
 
 Chín bất biến mà mọi bản triển khai phải giữ nằm ở `01` §14. Bất biến áp dụng ở mọi nơi là: không lớp nào được phép chặn.
 

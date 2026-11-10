@@ -14,7 +14,7 @@ Quy ước dùng trong tài liệu:
 - Thuật ngữ giao thức giữ nguyên tiếng Anh và mỗi khái niệm chỉ có một tên: client, server, peer,
   transport, frame, handshake, greeting, verdict, query, schema, fingerprint, session, message,
   heartbeat, probe, tick. Tên frame/trạng thái/sự kiện viết hoa: DATA, POLL, REPLY, HANDSHAKE,
-  HANDSHAKING, READY, CLOSED, CONNECT, DISCONNECT, MESSAGE, HANDSHAKE FAILED.
+  HANDSHAKE PART, HANDSHAKING, READY, CLOSED, CONNECT, DISCONNECT, MESSAGE, HANDSHAKE FAILED.
 - Tên trạng thái và sự kiện viết hoa (READY, DISCONNECT) là khái niệm trừu tượng, không ràng buộc vào ngôn ngữ nào. Mỗi bản triển khai tự đặt tên theo quy ước của mình.
 
 ---
@@ -76,8 +76,9 @@ Mọi thứ đi trên dây đều là frame, và mọi frame bắt đầu bằng
      1 POLL → không có nội dung. Một byte là toàn bộ frame.
      2 REPLY → không có nội dung. Một byte là toàn bộ frame.
      3 HANDSHAKE → nội dung gồm độ dài + các byte mờ (§2.3)
+     4 HANDSHAKE PART → nội dung mang một mảnh của nội dung handshake (§2.8)
 
-   Mọi byte loại khác 0-3 đều là vi phạm.
+   Mọi byte loại khác 0-4 đều là vi phạm.
 ```
 
 ### 2.2 Frame DATA
@@ -141,6 +142,8 @@ Vi phạm frame trên gói không phải lỗi chí mạng: bỏ đúng gói đ�
 
 Sự bất đối xứng này là có chủ ý, và cả hai phía phải cài đặt đúng.
 
+Nội dung handshake quá lớn với ngân sách handshake (§2.7) không phá quy tắc một frame mỗi gói. Core gửi nó thành nhiều frame HANDSHAKE PART, mỗi frame một gói (§2.8).
+
 ### 2.7 Bảng trần
 
 | Đại lượng | Trần | Ghi chú |
@@ -148,9 +151,68 @@ Sự bất đối xứng này là có chủ ý, và cả hai phía phải cài �
 | Dữ liệu của message | 16 MiB | Chung cho tất cả các bản triển khai |
 | Một frame DATA | 16 MiB + 11 byte | |
 | Nội dung của frame HANDSHAKE | 1 MiB | Chốt chặn cấp phát |
+| Một frame handshake trên transport kiểu gói | 900 byte | HANDSHAKE hoặc HANDSHAKE PART, xem §2.8 |
+| Số byte trong một HANDSHAKE PART | 891 byte | 900 trừ 9 byte tiêu đề |
+| Số mảnh của một nội dung handshake | 1 177 | 1 MiB chia 891, làm tròn lên |
 | Số message được khai báo trong greeting | 1 000 000 | Chốt chặn số học, xem §3.3 |
 | Số mục trong một query | 1 000 000 | Không vượt quá số message trong greeting, xem §3.3.2 |
 | Số vòng query mỗi session | 1 | Handshake không chạy quá hai lượt |
+
+### 2.8 Frame HANDSHAKE PART
+
+```
+   ┌────┬──────────────┬──────────────┬──────────────┬──────────────────┐
+   │ 04 │ chỉ số mảnh  │ số mảnh      │ độ dài       │ byte của mảnh    │
+   │ 1B │ 2B u16 LE    │ 2B u16 LE    │ 4B u32 LE    │ = độ dài byte    │
+   └────┴──────────────┴──────────────┴──────────────┴──────────────────┘
+    ^0   ^1-2           ^3-4           ^5-8           ^9 trở đi
+
+   Tổng kích thước = 9 + độ dài
+```
+
+Frame này chỉ có trên transport kiểu gói. Nó mang một mảnh của một nội dung handshake (§3: greeting, query hoặc phản hồi query) mà frame HANDSHAKE của nó sẽ vượt ngân sách handshake 900 byte (§2.7). Trên luồng byte, frame này là vi phạm frame, chí mạng như ở §2.5. Luồng byte gửi mọi nội dung handshake thành một frame HANDSHAKE, dù dài bao nhiêu.
+
+Ngân sách này giữ mỗi frame handshake trong một gói trên các đường mạng thường gặp: 900 byte chừa khoảng 300 byte dưới mức 1200 byte của `01_overview.md` §7 cho tiêu đề của transport và của các tầng bên dưới. Không có ngân sách, greeting trên UDP tăng 14 byte mỗi message và từ 84 message trở lên phải dựa vào phân mảnh IP, còn client ở trên đường mạng bỏ mảnh IP thì không bao giờ vào được.
+
+Gửi:
+
+```
+   L = độ dài nội dung handshake
+
+   5 + L ≤ 900  →  một frame HANDSHAKE, đúng như §2.3
+   5 + L > 900  →  số mảnh = ceil(L / 891), số mảnh ≥ 2
+                   mảnh i mang các byte [891 × i, 891 × i + 891) của nội dung
+                   mọi mảnh trừ mảnh cuối mang đúng 891 byte
+                   mảnh cuối mang phần còn lại, từ 1 tới 891 byte
+                   các mảnh đi theo thứ tự chỉ số, mỗi mảnh một gói
+```
+
+Greeting vừa một frame HANDSHAKE tới 62 message (`5 + 16 + 14 × 62 = 889` byte), nên các byte của nó không đổi; từ 63 message thì chia mảnh. Verdict dài một byte và không bao giờ bị chia.
+
+Nhận:
+
+- Mảnh có độ dài trên 891 là frame hỏng: bỏ gói (§2.6).
+- Đặt mỗi mảnh tại vị trí `891 × chỉ số`. Gói có thể đến sai thứ tự; chỉ số quyết định vị trí của mảnh, và core không sắp xếp lại thứ gì khác.
+- Mảnh lặp lại một chỉ số đã nhận, với cùng các byte, thì bỏ qua. Transport kiểu gói có thể giao một gói hai lần (`01_overview.md` §7).
+- Khi đủ mọi chỉ số, các byte ghép được đọc đúng như nội dung của một frame HANDSHAKE (§3). Phần ghép khi đó trống lại, và mảnh đến sau bắt đầu nội dung kế tiếp, chẳng hạn phản hồi query.
+
+Handshake thất bại khi có một trong các điều sau:
+
+```
+   số mảnh < 2, hoặc số mảnh > 1 177
+   chỉ số mảnh ≥ số mảnh
+   một mảnh trước mảnh cuối không mang đúng 891 byte, hoặc mảnh cuối mang 0 byte
+   số mảnh khác số mảnh của mảnh đầu tiên nhận được
+   một chỉ số lặp lại mang byte khác
+   nội dung ghép dài hơn 1 MiB
+   một frame HANDSHAKE đến khi còn thiếu mảnh
+```
+
+Thất bại như vậy là nội dung handshake hỏng: server trả verdict 3, còn client coi như HANDSHAKE FAILED (§3.4).
+
+- Mảnh đến khi session không còn ở HANDSHAKING (sau verdict) thì bị bỏ và không tính là hoạt động (§4). Ở server, mảnh đến trong lúc HANDSHAKING tính là hoạt động (§3.6).
+- Hạn handshake của client (§3.5) phủ mọi mảnh. Mất một mảnh thì nội dung không đủ, handshake hết hạn và ứng dụng kết nối lại, như khi mất greeting một gói.
+- Bên nhận giữ tối đa một nội dung dở mỗi session, tới `891 × số mảnh` byte. Server giữ một nội dung như vậy cho mỗi peer chưa xong handshake, trong trần bảng peer của `01_overview.md` §10.
 
 ---
 
@@ -186,7 +248,7 @@ Bốn điều định hình luồng này:
 
 1. Client luôn là bên chào, server luôn là bên phán quyết; client không bao giờ phán quyết. Luồng thường xong trong một vòng. Chỉ có đúng một trường hợp server phải hỏi thêm trước khi phán quyết (§3.3.2), và luồng không bao giờ quá hai vòng.
 2. Server là bên duy nhất so sánh. Client gửi schema của mình và không bao giờ thấy schema của server. Kể cả khi bị hỏi thêm, client chỉ trả lời câu hỏi và không tự phán quyết.
-3. Không có byte phân biệt greeting với phản hồi query. Cả hai đều nằm trong frame HANDSHAKE, và *vai trò cộng trạng thái* quyết định cách đọc. Server đọc payload đầu là greeting, payload thứ hai (nếu có) là phản hồi query. Theo chiều ngược lại, client đọc byte đầu: `0-3` là verdict, `4` là query.
+3. Không có byte phân biệt greeting với phản hồi query. Cả hai đều nằm trong frame HANDSHAKE, hoặc trong các frame HANDSHAKE PART ghép lại thành một (§2.8), và *vai trò cộng trạng thái* quyết định cách đọc. Server đọc payload đầu là greeting, payload thứ hai (nếu có) là phản hồi query. Theo chiều ngược lại, client đọc byte đầu: `0-3` là verdict, `4` là query.
 4. Verdict là một byte, và chính giá trị byte đó là lý do từ chối; không có bảng tra thứ hai. Giá trị `4` không phải verdict mà là một yêu cầu, nên nó không kết thúc session.
 
 ### 3.2 Nội dung greeting
@@ -356,7 +418,7 @@ Cái giá được ghi trong `SPEC-FINGERPRINT.md` §5 và là đánh đổi có
 
 ### 3.3.2 Query: verdict 4 và vòng trả lời
 
-Chỉ dùng cho nhánh ⓓ. Nội dung nằm trong frame HANDSHAKE, như mọi nội dung khác trong mục này.
+Chỉ dùng cho nhánh ⓓ. Nội dung nằm trong frame HANDSHAKE, như mọi nội dung khác trong mục này, và đi thành mảnh khi vượt ngân sách trên transport kiểu gói (§2.8).
 
 Server → client. Byte đầu là `4`, để client phân biệt ngay với verdict:
 
@@ -400,7 +462,7 @@ Ba quy tắc ngăn phát sinh thêm trạng thái:
 3. Hạn handshake của client (§3.5) tính cho toàn bộ quá trình, không được đặt lại sau mỗi vòng. Hai vòng dùng chung một hạn.
 ```
 
-Trên transport kiểu gói, hai gói query thêm này có thể bị mất. Khi đó handshake hết hạn và thất bại: session không mở, ứng dụng thử lại. Đây không phải chế độ lỗi mới. Fomoxa không truyền lại (RFC-0001 §2), nên mọi handshake trên transport không tin cậy đều là best-effort. Đổi lại, greeting 14 byte mỗi message thường chỉ tốn hai gói, và không phải chia nhỏ một greeting lớn ở mỗi lần kết nối.
+Trên transport kiểu gói, hai gói query thêm này có thể bị mất. Khi đó handshake hết hạn và thất bại: session không mở, ứng dụng thử lại. Đây không phải chế độ lỗi mới. Fomoxa không truyền lại (RFC-0001 §2), nên mọi handshake trên transport không tin cậy đều là best-effort. Đổi lại, greeting mang một fingerprint mỗi message thay vì cả chuỗi, nên chỉ dài 14 byte mỗi message. Trên transport kiểu gói, greeting tới 62 message là một gói, greeting lớn hơn đi thành nhiều mảnh (§2.8); query và phản hồi query cũng chia như vậy khi lớn. Mất bất kỳ mảnh nào có cùng hậu quả như mất một gói query.
 
 Để bỏ lượt khứ hồi thừa, bản triển khai có thể thử lạc quan: nếu handshake thất bại, lần kết nối sau gửi thẳng chuỗi tiền tố thay vì chờ query. Đây là lựa chọn triển khai, không phải yêu cầu của tài liệu này.
 
@@ -470,9 +532,11 @@ Frame không phải HANDSHAKE có thể đến trước khi handshake xong, và 
 | DATA | Bỏ, không giao cho ứng dụng | Bỏ, nhưng tính là hoạt động |
 | POLL | Vẫn trả REPLY, không sinh sự kiện | Trả REPLY, tính là hoạt động |
 | REPLY | Bỏ qua | Tính là hoạt động |
+| HANDSHAKE PART (§2.8) | Thêm vào nội dung đang ghép | Thêm vào nội dung đang ghép, tính là hoạt động |
+| HANDSHAKE PART (sau khi đã có verdict) | Bỏ | Bỏ, không tính là hoạt động |
 | HANDSHAKE thứ hai (sau khi đã có verdict) | Bỏ qua | Bỏ qua |
 
-Dòng cuối khác với vòng query. Trong lúc HANDSHAKING, frame HANDSHAKE thứ hai là bình thường và có nghĩa: với client nó là query, với server nó là phản hồi query (§3.3.2). Chỉ frame HANDSHAKE đến sau khi đã có verdict mới bị bỏ. Mỗi session có tối đa một vòng query, nên frame HANDSHAKE thứ ba trong lúc handshake là hỏng.
+Dòng cuối khác với vòng query. Trong lúc HANDSHAKING, frame HANDSHAKE thứ hai là bình thường và có nghĩa: với client nó là query, với server nó là phản hồi query (§3.3.2). Chỉ frame HANDSHAKE đến sau khi đã có verdict mới bị bỏ. Mỗi session có tối đa một vòng query, nên frame HANDSHAKE thứ ba trong lúc handshake là hỏng. Nội dung ghép từ các mảnh tính là một frame HANDSHAKE ở đây; bản thân các mảnh không được tính.
 
 Client vẫn phải trả REPLY khi chưa READY vì server được phép probe client trước khi trả lời một greeting hợp lệ. Nếu client im lặng với lý do chưa handshake xong, server kết luận client đã chết và cắt kết nối trong lúc client vẫn đang chờ server trả lời. Trả REPLY ở đây là điều kiện để handshake có thể hoàn tất.
 
@@ -745,6 +809,8 @@ Hình dạng của một tick. Thứ tự này là bắt buộc, không phải k
                ⤢ → nới bộ đệm, không trừ ngân sách, thử lại
                ✖⚠ → transport_chết = đúng, thoát vòng lặp
                ✔ → mở gói thành frame
+                     HANDSHAKE PART vào phần ghép trước (§2.8);
+                     chỉ nội dung đủ mảnh mới tới máy trạng thái
                      đưa vào máy trạng thái session
                      áp dụng kết quả (xem bên dưới)
                      trừ một đơn vị ngân sách
@@ -768,6 +834,8 @@ Hình dạng của một tick. Thứ tự này là bắt buộc, không phải k
 ```
    áp_dụng(kết_quả):
        nếu có frame cần gửi:
+           trên transport kiểu gói, frame HANDSHAKE vượt ngân sách thành
+           các frame HANDSHAKE PART của nó (§2.8); mỗi mảnh đi qua các bước dưới
            nếu ô chờ còn dữ liệu:
                xếp frame này sau nó ← không ghi đè
                nếu hàng chờ vượt trần → transport_chết = đúng
@@ -792,6 +860,14 @@ Cấm ghi đè ô chờ. Các frame ở đây (POLL, REPLY, verdict handshake) d
 Hàng chờ phải có trần, và trần đó phải thấp. Bản thân giao thức đã giới hạn số frame điều khiển tồn tại cùng lúc: đúng một probe mỗi cửa sổ im lặng (§4.5), một REPLY cho mỗi POLL nhận được, tối đa một vòng query mỗi session (§3.3.2). Vượt quá một con số nhỏ nghĩa là một giả định đã sai, không phải tải cao bình thường. Con số cụ thể tùy bản triển khai, nhưng bắt buộc phải có.
 
 Chạm trần thì kết thúc session, không ném lỗi. Bất biến B6 yêu cầu đúng một sự kiện kết thúc mỗi session, và DISCONNECT đáp ứng yêu cầu đó. Ném ngoại lệ ra khỏi tick thì không: nó phá cam kết "tick trả về một danh sách sự kiện", và một server đang duyệt nhiều peer sẽ bỏ sót các peer còn lại trong cùng tick đó.
+
+Frame HANDSHAKE PART (§2.8) đổi ba điều trong khối này.
+
+Việc chia và ghép thuộc core, nằm ngoài máy trạng thái session (quy tắc 2 bên dưới). Máy trạng thái vẫn nhận và trả nội dung handshake trọn vẹn như trước; chỉ core biết transport có phải kiểu gói hay không.
+
+Trên transport kiểu gói, ô chờ và hàng chờ giữ từng frame trọn vẹn, và mỗi frame sau đó đi thành một gói riêng. Nối các frame đang giữ vào một lần ghi sẽ đặt nhiều frame vào một gói, điều §2.6 cấm. Trên luồng byte thì được nối, vì luồng không có ranh giới gói.
+
+Mảnh của nội dung handshake không tính vào trần của hàng chờ. Giao thức đã giới hạn chúng: mỗi session một nội dung tại một thời điểm, tối đa 1 177 mảnh (§2.7). Nhờ vậy transport bị tắc có thể giữ trọn một greeting mà session không kết thúc.
 
 Bốn quy tắc cố định của core:
 
@@ -923,6 +999,8 @@ Một bản triển khai được coi là đúng khi qua hết các phép thử 
 - Giải mã luồng byte khi nạp mỗi lần một byte; vẫn phải ra đúng các frame
 - Nhiều frame dính nhau trong một đợt dữ liệu phải được tách đúng
 - Byte loại không hợp lệ: chí mạng trên luồng byte, chỉ bỏ gói trên transport kiểu gói
+- Frame HANDSHAKE PART trên luồng byte: chí mạng
+- Frame HANDSHAKE PART khai báo quá 891 byte: bỏ gói
 - Gói thiếu byte và gói thừa byte đều là hỏng
 - Dữ liệu đúng bằng trần thì qua; vượt trần một byte thì bị từ chối
 
@@ -954,6 +1032,19 @@ Vòng query:
 - Server gửi query lần 2 → client coi như HANDSHAKE FAILED
 - Query yêu cầu một mã định danh không có trong greeting → client coi như HANDSHAKE FAILED
 - Hạn handshake của client không được đặt lại qua vòng query
+
+Mảnh handshake, trên transport kiểu gói:
+
+- Greeting 62 message đi thành một frame HANDSHAKE 889 byte; greeting 63 message đi thành hai mảnh mang 891 và 7 byte
+- Không frame handshake nào trên transport kiểu gói dài quá 900 byte
+- Transport kiểu luồng byte gửi cùng greeting lớn đó thành một frame HANDSHAKE
+- Mảnh sai thứ tự, và một mảnh y hệt nhận hai lần → server ghép được greeting và phán quyết như thường
+- Số mảnh bằng 1, chỉ số vượt số mảnh, mảnh ngắn trước mảnh cuối, số mảnh thay đổi, mảnh lặp lại mang byte khác, nội dung ghép quá 1 MiB, frame HANDSHAKE đến khi còn thiếu mảnh → server trả verdict 3
+- Client nhận mảnh hỏng → HANDSHAKE FAILED
+- Vòng query mà cả query lẫn phản hồi đều đi thành mảnh → verdict 0
+- Mảnh đến sau handshake → bị bỏ, không tính là hoạt động
+- Mảnh đến trong lúc handshake tính là hoạt động ở server
+- Transport giả luôn trả ⏸ trong lúc gửi mảnh → các mảnh đi sau đó thành từng gói riêng, và greeting lớn hơn trần hàng chờ không làm kết thúc session
 
 Frame và giới hạn:
 
@@ -990,3 +1081,4 @@ Frame và giới hạn:
 ### Liên thông
 - Tiêu chí chính: hai bản triển khai bằng hai ngôn ngữ khác nhau liên thông được với nhau theo cả hai chiều
 - Trên cả transport kiểu dòng byte lẫn transport kiểu gói
+- Greeting từ 63 message trở lên trên transport kiểu gói, với mỗi bản triển khai lần lượt làm client

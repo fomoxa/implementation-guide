@@ -14,7 +14,7 @@ Conventions used here:
 - Protocol terms have exactly one name each: client, server, peer, transport, frame,
   handshake, greeting, verdict, query, schema, fingerprint, session, message, heartbeat,
   probe, tick. Frame, state and event names are capitalised: DATA, POLL, REPLY, HANDSHAKE,
-  HANDSHAKING, READY, CLOSED, CONNECT, DISCONNECT, MESSAGE, HANDSHAKE FAILED.
+  HANDSHAKE PART, HANDSHAKING, READY, CLOSED, CONNECT, DISCONNECT, MESSAGE, HANDSHAKE FAILED.
 - Capitalised state and event names (READY, DISCONNECT) are abstract concepts bound to no language. Each implementation names them by its own conventions.
 
 ---
@@ -76,8 +76,9 @@ Everything on the wire is a frame. Every frame starts with a type byte:
      1 POLL → no body. One byte is the whole frame.
      2 REPLY → no body. One byte is the whole frame.
      3 HANDSHAKE → body carries a length + opaque bytes (§2.3)
+     4 HANDSHAKE PART → body carries one part of a handshake body (§2.8)
 
-   Any type byte other than 0-3 is a violation.
+   Any type byte other than 0-4 is a violation.
 ```
 
 ### 2.2 The DATA frame
@@ -141,6 +142,8 @@ A framing violation on a packet is not fatal: drop that packet and move on. Pack
 
 The asymmetry is deliberate, and both sides must implement it correctly.
 
+A handshake body too large for the handshake budget (§2.7) does not break the one-frame rule. Core sends it as several HANDSHAKE PART frames, each in its own packet (§2.8).
+
 ### 2.7 Ceiling table
 
 | Quantity | Ceiling | Note |
@@ -148,9 +151,68 @@ The asymmetry is deliberate, and both sides must implement it correctly.
 | Message payload | 16 MiB | The same for every implementation |
 | One DATA frame | 16 MiB + 11 bytes | |
 | HANDSHAKE frame body | 1 MiB | Allocation guard |
+| One handshake frame on a packet transport | 900 bytes | HANDSHAKE or HANDSHAKE PART, see §2.8 |
+| Bytes in one HANDSHAKE PART | 891 bytes | 900 minus the 9-byte header |
+| Parts of one handshake body | 1 177 | 1 MiB divided by 891, rounded up |
 | Messages declared in a greeting | 1 000 000 | Arithmetic guard, see §3.3 |
 | Entries in one query | 1 000 000 | Never exceeds the greeting message count, see §3.3.2 |
 | Query rounds per session | 1 | The handshake never runs more than twice |
+
+### 2.8 The HANDSHAKE PART frame
+
+```
+   ┌────┬──────────────┬──────────────┬──────────────┬──────────────────┐
+   │ 04 │ part index   │ part count   │ length       │ part bytes       │
+   │ 1B │ 2B u16 LE    │ 2B u16 LE    │ 4B u32 LE    │ = length bytes   │
+   └────┴──────────────┴──────────────┴──────────────┴──────────────────┘
+    ^0   ^1-2           ^3-4           ^5-8           ^9 onward
+
+   Total size = 9 + length
+```
+
+This frame exists only on a packet transport. It carries one piece of a handshake body (§3: a greeting, a query or a query answer) whose HANDSHAKE frame would exceed the handshake budget of 900 bytes (§2.7). On a byte stream it is a framing violation, fatal as in §2.5. A byte stream sends every handshake body as one HANDSHAKE frame, whatever its size.
+
+The budget keeps every handshake frame within one packet on common paths: 900 bytes leaves about 300 bytes under the 1200-byte guideline of `01_overview.md` §7 for the headers of the transport and of the layers below it. Without the budget, a greeting over UDP grows by 14 bytes per message and relies on IP fragmentation from 84 messages on, and a client on a path that drops fragments never gets in.
+
+Sending:
+
+```
+   L = length of the handshake body
+
+   5 + L ≤ 900  →  one HANDSHAKE frame, exactly as in §2.3
+   5 + L > 900  →  count = ceil(L / 891) parts, count ≥ 2
+                   part i carries bytes [891 × i, 891 × i + 891) of the body
+                   every part except the last carries exactly 891 bytes
+                   the last part carries the rest, 1 to 891 bytes
+                   the parts leave in index order, one per packet
+```
+
+A greeting fits one HANDSHAKE frame up to 62 messages (`5 + 16 + 14 × 62 = 889` bytes), so its bytes do not change; parts start at 63 messages. A verdict is one byte and is never split.
+
+Receiving:
+
+- A part whose length is above 891 is a corrupt frame: drop the packet (§2.6).
+- Place each part at offset `891 × index`. Packets can arrive out of order; the index alone decides where a part goes, and core reorders nothing else.
+- A part that repeats an index already received, with the same bytes, is ignored. A packet transport may deliver a packet twice (`01_overview.md` §7).
+- When every index has arrived, the assembled bytes are read exactly as the body of one HANDSHAKE frame (§3). The assembly is then empty again, and a later part starts the next body, such as the query answer.
+
+The handshake fails when any of these holds:
+
+```
+   part count < 2, or part count > 1 177
+   part index ≥ part count
+   a part before the last one does not carry exactly 891 bytes, or the last one carries 0
+   the part count differs from the count of the first part received
+   a repeated index carries different bytes
+   the assembled body is longer than 1 MiB
+   a HANDSHAKE frame arrives while parts are still missing
+```
+
+Such a failure is a broken handshake body: the server answers verdict 3, and the client treats it as HANDSHAKE FAILED (§3.4).
+
+- A part that arrives when the session is no longer HANDSHAKING (after the verdict) is dropped and does not count as activity (§4). On the server, a part that arrives during HANDSHAKING counts as activity (§3.6).
+- The client handshake deadline (§3.5) covers every part. A lost part leaves the body incomplete, the handshake expires, and the app reconnects, as it does when a one-packet greeting is lost.
+- A receiver holds at most one incomplete body per session, up to `891 × part count` bytes. A server holds one for each peer that has not finished its handshake, within the peer table ceiling of `01_overview.md` §10.
 
 ---
 
@@ -186,7 +248,7 @@ Four facts shape this flow:
 
 1. The client always greets and the server always rules; the client never rules. The exchange usually finishes in one round. Exactly one case forces the server to ask again before ruling (§3.3.2), and the exchange never takes more than two rounds.
 2. The server is the only side that compares. The client sends its own schema and never sees the server's. Even when asked again, the client only answers the question and does not rule.
-3. No byte separates the greeting from the query answer. Both ride in a HANDSHAKE frame; *role plus state* decides how to read it. Server reads the first payload as the greeting, the second one (if any) as the query answer. In the other direction the client reads the first byte: `0-3` is a verdict, `4` is a query.
+3. No byte separates the greeting from the query answer. Both ride in a HANDSHAKE frame, or in HANDSHAKE PART frames that assemble into one (§2.8); *role plus state* decides how to read it. Server reads the first payload as the greeting, the second one (if any) as the query answer. In the other direction the client reads the first byte: `0-3` is a verdict, `4` is a query.
 4. The verdict is one byte, and that byte value is the rejection reason. There is no second lookup table. The value `4` is not a verdict but a request, so it does not end the session.
 
 ### 3.2 Greeting body
@@ -358,7 +420,7 @@ The price is written down in `SPEC-FINGERPRINT.md` §5, and it is a deliberate t
 
 ### 3.3.2 Query: verdict 4 and the answer round
 
-Used only for branch ⓓ. The body rides in a HANDSHAKE frame, like everything else in this section.
+Used only for branch ⓓ. The body rides in a HANDSHAKE frame, like everything else in this section, and in parts when it exceeds the budget on a packet transport (§2.8).
 
 Server → client. The first byte is `4`, so the client tells it apart from a verdict immediately:
 
@@ -402,7 +464,7 @@ Three rules prevent any additional state:
 3. The client handshake deadline (§3.5) covers the whole process. It must not reset per round. Two rounds share one deadline.
 ```
 
-On a packet transport those two extra query packets can be lost. If they are, the handshake expires and fails: the session does not open and the app retries. This is not a new failure mode. Fomoxa does not retransmit (RFC-0001 §2), so every handshake over an unreliable transport is best-effort. In exchange, a 14-byte-per-message greeting usually costs two packets, and no large greeting has to be split on every connection.
+On a packet transport those two extra query packets can be lost. If they are, the handshake expires and fails: the session does not open and the app retries. This is not a new failure mode. Fomoxa does not retransmit (RFC-0001 §2), so every handshake over an unreliable transport is best-effort. In exchange, the greeting carries one fingerprint per message instead of the whole chain, so it stays at 14 bytes per message. On a packet transport a greeting of up to 62 messages is one packet, and a larger one goes out in parts (§2.8); the query and its answer split the same way when they are large. Losing any part has the same effect as losing a query packet.
 
 To drop the extra round trip, try optimistically first: if the handshake fails, the next connection sends the prefix chain directly instead of waiting for a query. That is an implementation choice, not a requirement of this document.
 
@@ -472,9 +534,11 @@ Frames other than HANDSHAKE can arrive before the handshake finishes. None of th
 | DATA | Drop it, never hand it to the app | Drop it, but count it as activity |
 | POLL | Still answer REPLY, raise no event | Answer REPLY, count it as activity |
 | REPLY | Ignore | Count it as activity |
+| HANDSHAKE PART (§2.8) | Add it to the body being assembled | Add it to the body being assembled, count it as activity |
+| HANDSHAKE PART (after the verdict) | Drop | Drop, not activity |
 | A second HANDSHAKE (after the verdict) | Ignore | Ignore |
 
-Do not confuse the last row with the query round. During HANDSHAKING a second HANDSHAKE frame is normal and meaningful: for the client it is a query, for the server it is the query answer (§3.3.2). Only HANDSHAKE frames arriving after the verdict are dropped. Each session allows at most one query round; a third HANDSHAKE frame during the handshake is corrupt.
+Do not confuse the last row with the query round. During HANDSHAKING a second HANDSHAKE frame is normal and meaningful: for the client it is a query, for the server it is the query answer (§3.3.2). Only HANDSHAKE frames arriving after the verdict are dropped. Each session allows at most one query round; a third HANDSHAKE frame during the handshake is corrupt. A body assembled from parts counts here as one HANDSHAKE frame; the parts themselves are not counted.
 
 Why must the client still answer REPLY before READY? The server may probe the client before it answers a valid greeting. If the client stays silent because "the handshake is not done", the server concludes it is dead and cuts it off while it is still waiting for the server's answer. Answering REPLY here is what gives the process a chance to finish.
 
@@ -747,6 +811,8 @@ The shape of one tick. This order is mandatory, not advisory.
                ⤢ → grow the buffer, do not spend budget, retry
                ✖⚠ → transport_dead = true, exit the loop
                ✔ → unpack into a frame
+                     a HANDSHAKE PART goes to the assembly first (§2.8);
+                     only a complete body reaches the state machine
                      feed the session state machine
                      apply the result (see below)
                      spend one unit of budget
@@ -770,6 +836,8 @@ The shape of one tick. This order is mandatory, not advisory.
 ```
    apply(result):
        if there is a frame to send:
+           on a packet transport, a HANDSHAKE frame over the budget becomes
+           its HANDSHAKE PART frames (§2.8); each part goes through the steps below
            if the pending slot holds data:
                queue this frame after it ← never overwrite
                if the pending queue exceeds its ceiling → transport_dead = true
@@ -794,6 +862,14 @@ The pending slot must never be overwritten. The frames involved (POLL, REPLY, th
 The pending queue must have a ceiling, and that ceiling must be low. The protocol itself caps how many control frames can live at once: exactly one probe per silence window (§4.5), one REPLY per POLL received, at most one query round per session (§3.3.2). Exceeding a small number means an assumption broke, not that load is high. The exact number is per implementation, but having one is mandatory.
 
 Hitting the ceiling ends the session; it does not throw. Invariant B6 requires exactly one termination event per session, and DISCONNECT fits that shape. Throwing an exception out of the tick does not: it breaks the promise that "tick returns a list of events". A server iterating many peers would lose the remaining peers in that same tick.
+
+HANDSHAKE PART frames (§2.8) change three things in this block.
+
+Splitting and assembly belong to core, outside the session state machine (rule 2 below). The state machine takes and returns whole handshake bodies, as before; only core knows whether the transport is a packet transport.
+
+On a packet transport, the pending slot and the pending queue hold whole frames, and each one later leaves as its own packet. Joining held frames into one write puts several frames in one packet, which §2.6 forbids. On a byte stream they may be joined, because the stream has no packet boundaries.
+
+Parts of a handshake body do not count toward the pending queue ceiling. The protocol already bounds them: one body at a time per session, at most 1 177 parts (§2.7). A blocked transport can therefore hold a whole greeting without ending the session.
 
 Core has four fixed rules:
 
@@ -925,6 +1001,8 @@ An implementation counts as correct when it passes all of these. They are langua
 - Decode a byte stream fed one byte at a time; the same frames must come out
 - Several frames glued into one feed must split correctly
 - An invalid type byte: fatal on a byte stream, drop the packet only on a packet transport
+- A HANDSHAKE PART frame on a byte stream: fatal
+- A HANDSHAKE PART declaring more than 891 bytes: drop the packet
 - Packets missing bytes and packets with extra bytes are both corrupt
 - Data exactly at the ceiling passes; one byte over the ceiling is rejected
 
@@ -956,6 +1034,19 @@ Query round:
 - Server sends a second query → the client treats it as HANDSHAKE FAILED
 - A query asks for an id absent from the greeting → the client treats it as HANDSHAKE FAILED
 - The client handshake deadline does not reset across the query round
+
+Handshake parts, on a packet transport:
+
+- A greeting of 62 messages leaves as one HANDSHAKE frame of 889 bytes; one of 63 messages leaves as two parts carrying 891 and 7 bytes
+- No handshake frame on a packet transport is longer than 900 bytes
+- A byte-stream transport sends the same large greeting as one HANDSHAKE frame
+- Parts out of order, and an identical part received twice → the server assembles the greeting and rules as usual
+- A part count of 1, an index past the count, a short part before the last, a changing part count, a repeated part with different bytes, an assembled body over 1 MiB, a HANDSHAKE frame while parts are missing → the server answers verdict 3
+- The client receives broken parts → HANDSHAKE FAILED
+- A query round where the query and the answer both go in parts → verdict 0
+- A part after the handshake → dropped, not counted as activity
+- A part during the handshake counts as activity for the server
+- A fake transport that always returns ⏸ while parts are sent → they leave later as separate packets, and a greeting larger than the pending queue ceiling does not end the session
 
 Framing and limits:
 
@@ -992,3 +1083,4 @@ Framing and limits:
 ### Interoperability
 - Two implementations in two different languages interoperate in both directions (the primary criterion)
 - Over a byte-stream transport and over a packet transport alike
+- A greeting of 63 messages or more over a packet transport, with each implementation as the client

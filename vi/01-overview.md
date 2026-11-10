@@ -326,6 +326,8 @@ Frame vượt trần transport thì transport trả ⊘ "quá lớn" (§2), khô
 
 Cấm transport tự cắt nhỏ frame để gửi, vì cắt nhỏ là đổi định dạng trên dây.
 
+Core tự chia đúng một thứ: nội dung handshake trên transport kiểu gói, thành các frame HANDSHAKE PART dài tối đa 900 byte (`02_flows.md` §2.8). Việc chia này là một phần của định dạng trên dây, và nó giữ handshake dưới mức khuyến nghị của UDP ở trên, dù schema lớn tới đâu. Message ứng dụng không bao giờ bị chia; frame DATA vượt trần transport vẫn nhận ⊘.
+
 Theo chiều nhận, khi gói đến lớn hơn chỗ core cấp, transport trả ⤢ kèm số byte cần. Core nới bộ đệm và hỏi lại ngay trong tick đó. Cấm làm mất gói.
 
 ### Những gì Fomoxa không làm
