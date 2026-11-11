@@ -302,7 +302,9 @@ Transport drops the oldest packet rather than the newest for two reasons. Transp
 
 If the dropped packet was the handshake packet, no new failure mode appears: losing a handshake packet leads to a timeout and then to failure. This is fail-closed and matches the query round described in `02_flows.md` §3.3.2. Fomoxa does not retransmit, so every handshake over a packet transport is best-effort.
 
-This direction of failure is safe. A session opens only on receiving verdict byte `0` (`02_flows.md` §3.4), so a lost packet can never turn a reject verdict into an accept; it can only block a session that would have opened, and the app must reconnect. The queue is also nearly empty during the handshake, because the whole exchange is two to four small packets. The queue ceiling is reached only under traffic bursts.
+This direction of failure is safe. A session opens only on receiving verdict byte `0` (`02_flows.md` §3.4), so a lost packet can never turn a reject verdict into an accept; it can only block a session that would have opened, and the app must reconnect.
+
+A handshake can itself be a burst. On a packet transport, a handshake body that does not fit one 900-byte frame leaves as HANDSHAKE PART frames, one per packet, up to 1 177 of them (`02_flows.md` §2.8). If the receiving transport's buffer holds fewer packets than arrive together, it drops the oldest parts, the body never completes, and the handshake expires as described above. The ceiling remains the implementation's choice.
 
 In addition, when the app stops ticking, the heartbeat stops with it (step 3, §8). The peer probes, gets no answer and declares the session dead. Stopping ticks for a long time is therefore not a safe pause; it causes the connection to be lost.
 

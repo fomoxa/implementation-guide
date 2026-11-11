@@ -302,7 +302,9 @@ Transport bỏ gói cũ nhất thay vì gói mới nhất vì hai lý do. Transp
 
 Nếu gói bị bỏ là gói handshake, không phát sinh chế độ lỗi mới: mất gói handshake dẫn tới hết hạn rồi thất bại. Đây là fail-closed, khớp với vòng query mô tả ở `02_flows.md` §3.3.2. Fomoxa không truyền lại, nên mọi handshake trên transport kiểu gói đều là best-effort.
 
-Hướng hỏng này an toàn. Session chỉ mở khi nhận đúng byte verdict `0` (`02_flows.md` §3.4), nên mất gói không bao giờ biến một verdict từ chối thành chấp nhận; nó chỉ chặn một session lẽ ra đã mở, và ứng dụng phải kết nối lại. Hàng đợi cũng gần như rỗng lúc handshake vì cả quá trình chỉ có hai đến bốn gói nhỏ; trần hàng đợi chỉ bị chạm khi lưu lượng dồn.
+Hướng hỏng này an toàn. Session chỉ mở khi nhận đúng byte verdict `0` (`02_flows.md` §3.4), nên mất gói không bao giờ biến một verdict từ chối thành chấp nhận; nó chỉ chặn một session lẽ ra đã mở, và ứng dụng phải kết nối lại.
+
+Bản thân handshake cũng có thể là một đợt dồn. Trên transport gói, body handshake không vừa một frame 900 byte đi bằng các frame HANDSHAKE PART, mỗi gói một frame, tối đa 1 177 frame (`02_flows.md` §2.8). Nếu buffer của transport bên nhận giữ được ít gói hơn số gói tới cùng lúc, nó bỏ các mảnh cũ nhất, body không bao giờ đủ, và handshake hết hạn như đã nói ở trên. Con số trần vẫn do bản cài đặt chọn.
 
 Ngoài ra, khi ứng dụng ngừng tick thì heartbeat cũng ngừng (bước 3, §8). Peer gửi probe, không nhận được trả lời và tuyên bố session chết. Vì vậy ngừng tick lâu không phải một trạng thái tạm dừng an toàn mà dẫn tới mất kết nối.
 
